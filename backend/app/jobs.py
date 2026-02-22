@@ -35,6 +35,7 @@ class JobRecord:
     input_path: Optional[str] = None
     markdown_path: Optional[str] = None
     json_path: Optional[str] = None
+    message: Optional[str] = None
 
     def public_dict(self, *, base_url: str = "") -> dict:
         result: Optional[JobResult] = None
@@ -55,6 +56,7 @@ class JobRecord:
             "progress": float(self.progress),
             "error": self.error,
             "result": asdict(result) if result else None,
+            "message": self.message,
         }
         return payload
 
@@ -100,6 +102,7 @@ class InMemoryJobStore:
         stage: Optional[str] = None,
         progress: Optional[float] = None,
         error: Optional[str] = None,
+        message: Optional[str] = None,
     ) -> None:
         with self._lock:
             rec = self._jobs[job_id]
@@ -111,5 +114,7 @@ class InMemoryJobStore:
                 rec.progress = max(0.0, min(1.0, float(progress)))
             if error is not None:
                 rec.error = error
+            if message is not None:
+                rec.message = message
             rec.updated_at = _utcnow()
 

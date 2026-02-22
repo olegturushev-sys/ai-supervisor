@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -14,6 +15,14 @@ from .jobs import InMemoryJobStore
 from .worker import run_job
 from .debug_log import dlog
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler("backend.log"),
+        logging.StreamHandler(),
+    ],
+)
 
 app = FastAPI()
 app.add_middleware(

@@ -8,4 +8,5 @@ numpy
 sentencepiece
 speechbrain
 scikit-learn
+httpx
 

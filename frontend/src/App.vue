@@ -104,6 +104,23 @@ async function downloadMarkdown() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
+async function downloadAnalysis() {
+  if (!taskId.value) return
+  try {
+    const text = await getMarkdown(taskId.value + '_analysis')
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${taskId.value}_analysis.md`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  } catch (e) {
+    error.value = 'Анализ недоступен: ' + String(e?.message || e)
+  }
+}
+
 onBeforeUnmount(() => {
   if (pollTimer) clearTimeout(pollTimer)
 })
@@ -143,6 +160,14 @@ watch(file, () => {
             @click="downloadMarkdown"
           >
             Скачать Markdown
+          </button>
+
+          <button
+            class="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+            :disabled="!isDone"
+            @click="downloadAnalysis"
+          >
+            Скачать анализ
           </button>
 
           <button

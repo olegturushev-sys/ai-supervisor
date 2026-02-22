@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,10 @@ from pathlib import Path
 from .jobs import InMemoryJobStore
 from .whisperx_service import TranscriptionService
 from .debug_log import dlog
+from .config import OPENROUTER_API_KEY
+from .openrouter_service import analyze_transcript
+
+logger = logging.getLogger(__name__)
 
 
 _SEMAPHORE = asyncio.Semaphore(int(os.getenv("JOBS_CONCURRENCY", "1")))
@@ -72,6 +77,32 @@ def _write_markdown(output_path: Path, audio_path: Path, result: dict) -> None:
 def _write_json(output_path: Path, result: dict) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_analysis_markdown(
+    output_path: Path,
+    transcript: str,
+    analysis: str,
+) -> None:
+    """
+    Write final analysis markdown with AI analysis FIRST, then transcript.
+    """
+    lines = [
+        "# Анализ психотерапевтической сессии",
+        "",
+        "## Анализ сессии (AI)",
+        "",
+        analysis,
+        "",
+        "---",
+        "",
+        "## Исходная транскрипция",
+        "",
+        transcript,
+        "",
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 
 async def _ffmpeg_convert_to_wav(input_path: Path, wav_path: Path) -> None:
@@ -227,6 +258,60 @@ async def run_job(job_id: str, input_path: Path, store: InMemoryJobStore) -> Non
 
             store.set_markdown_path(job_id, md_path)
             store.set_json_path(job_id, json_path)
+
+            # Анализ через OpenRouter
+            if OPENROUTER_API_KEY:
+                store.update(job_id, stage="analyze", progress=0.97, message="Анализ сессии...")
+                try:
+                    transcript_text = await asyncio.to_thread(md_path.read_text, encoding="utf-8")
+                    logger.info("Starting OpenRouter analysis for job %s, transcript length: %d", job_id, len(transcript_text))
+                    analysis = await analyze_transcript(transcript_text)
+                    logger.info("OpenRouter analysis result: %s", analysis[:200] if analysis else "None")
+                    
+                    output_dir = _project_root() / "output"
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    if analysis:
+                        # Overwrite original md_path with analysis (for frontend download)
+                        await asyncio.to_thread(
+                            _write_analysis_markdown,
+                            md_path,
+                            transcript_text,
+                            analysis,
+                        )
+                        # Also save to Downloads
+                        downloads_path = Path.home() / "Downloads"
+                        analysis_path = downloads_path / f"{job_id}_analysis.md"
+                        await asyncio.to_thread(
+                            _write_analysis_markdown,
+                            analysis_path,
+                            transcript_text,
+                            analysis,
+                        )
+                        # Save analysis to output folder for separate download button
+                        analysis_output_path = output_dir / f"{job_id}_analysis.md"
+                        await asyncio.to_thread(
+                            _write_analysis_markdown,
+                            analysis_output_path,
+                            transcript_text,
+                            analysis,
+                        )
+                        logger.info("Analysis saved to %s, %s and %s", md_path, analysis_path, analysis_output_path)
+                    else:
+                        # Save stub to indicate analysis ran but returned nothing
+                        stub_path = output_dir / f"{job_id}_analysis.md"
+                        stub_path.write_text("# Анализ недоступен\n\nAPI вернул пустой результат.\n", encoding="utf-8")
+                        logger.warning("Analysis returned empty, saved stub to %s", stub_path)
+                except Exception as e:
+                    logger.warning("OpenRouter analysis failed: %s", e)
+            else:
+                logger.info("OPENROUTER_API_KEY not set, skipping analysis")
+                # Create stub file so download button works
+                output_dir = _project_root() / "output"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                stub_path = output_dir / f"{job_id}_analysis.md"
+                stub_path.write_text("# Анализ недоступен\n\nOPENROUTER_API_KEY не настроен.\n", encoding="utf-8")
+
             store.update(job_id, state="done", stage="done", progress=1.0)
             # region agent log
             dlog(
