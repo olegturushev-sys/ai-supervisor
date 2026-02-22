@@ -11,12 +11,28 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
+
+def _load_wav_float32(
+    wav_path_or_audio: Union[str, tuple[Any, int]],
+) -> tuple[Any, int]:
+    """Load or accept (wav_float32, sr). Returns (wav_float32_mono, sr)."""
+    import numpy as np  # type: ignore
+    import soundfile as sf  # type: ignore
+
+    if isinstance(wav_path_or_audio, (list, tuple)) and len(wav_path_or_audio) == 2:
+        wav = np.asarray(wav_path_or_audio[0], dtype=np.float32)
+        sr = int(wav_path_or_audio[1])
+    else:
+        wav, sr = sf.read(str(wav_path_or_audio), dtype="float32", always_2d=False)
+    if hasattr(wav, "ndim") and wav.ndim == 2:
+        wav = wav.mean(axis=1)
+    return np.asarray(wav, dtype=np.float32), int(sr)
+
 _VAD_CACHE: dict[str, Any] = {}
-_ENCODER_CACHE: dict[tuple[str, str], Any] = {}
 _CACHE_LOCK = threading.Lock()
 
 
@@ -118,24 +134,9 @@ def _get_speech_segments(
 
 
 def _get_ecapa_encoder(embedding_model: str, device: str) -> Any:
-    """Get or create cached ECAPA-TDNN encoder."""
-    key = (embedding_model, device)
-    with _CACHE_LOCK:
-        enc = _ENCODER_CACHE.get(key)
-        if enc is not None:
-            return enc
-
-    from speechbrain.inference.speaker import EncoderClassifier  # type: ignore
-
-    t0 = time.perf_counter()
-    enc = EncoderClassifier.from_hparams(
-        source=embedding_model,
-        run_opts={"device": device},
-    )
-    with _CACHE_LOCK:
-        _ENCODER_CACHE[key] = enc
-    logger.info("ECAPA encoder %s loaded in %.2fs", embedding_model, time.perf_counter() - t0)
-    return enc
+    """Get or create cached ECAPA-TDNN encoder (delegates to shared embedding_cache)."""
+    from ..embedding_cache import get_ecapa_encoder
+    return get_ecapa_encoder(embedding_model, device)
 
 
 def _linear_resample(x: Any, sr_in: int, sr_out: int) -> Any:
@@ -227,7 +228,7 @@ def _map_to_roles(
 
 
 def diarize_segments_by_embedding(
-    wav_path: str,
+    wav_path_or_audio: Union[str, tuple[Any, int]],
     segments: list[dict[str, Any]],
     cfg: DiarizationFastConfig,
 ) -> list[dict[str, Any]]:
@@ -236,7 +237,6 @@ def diarize_segments_by_embedding(
     Avoids Silero VAD / overlap mapping and gives balanced Client/Therapist labels.
     """
     import numpy as np  # type: ignore
-    import soundfile as sf  # type: ignore
 
     if len(segments) < 2:
         return segments
@@ -252,10 +252,7 @@ def diarize_segments_by_embedding(
         except Exception:
             device = "cpu"
 
-    wav, sr = sf.read(wav_path, dtype="float32", always_2d=False)
-    if hasattr(wav, "ndim") and wav.ndim == 2:
-        wav = wav.mean(axis=1)
-    wav = np.asarray(wav, dtype=np.float32)
+    wav, sr = _load_wav_float32(wav_path_or_audio)
     if sr != 16000:
         wav = _linear_resample(wav, int(sr), 16000)
         sr = 16000
@@ -300,7 +297,7 @@ def diarize_segments_by_embedding(
 
 
 def diarize_audio_fast(
-    wav_path: str,
+    wav_path_or_audio: Union[str, tuple[Any, int]],
     cfg: DiarizationFastConfig,
     *,
     num_speakers: Optional[int] = None,
@@ -311,7 +308,6 @@ def diarize_audio_fast(
     Returns list of dicts with start, end, speaker.
     """
     import numpy as np  # type: ignore
-    import soundfile as sf  # type: ignore
 
     device = cfg.device
     if device in ("auto", "mps"):
@@ -327,10 +323,7 @@ def diarize_audio_fast(
 
     t_total = time.perf_counter()
 
-    wav, sr = sf.read(wav_path, dtype="float32", always_2d=False)
-    if hasattr(wav, "ndim") and wav.ndim == 2:
-        wav = wav.mean(axis=1)
-    wav = np.asarray(wav, dtype=np.float32)
+    wav, sr = _load_wav_float32(wav_path_or_audio)
     if sr != 16000:
         wav = _linear_resample(wav, int(sr), 16000)
         sr = 16000

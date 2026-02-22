@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Union
+
+import numpy as np  # type: ignore
 
 
 @dataclass(frozen=True)
@@ -12,7 +14,7 @@ class VadSegment:
 
 
 def segment_wav_energy_vad(
-    wav_path: str,
+    wav_path_or_audio: Union[str, Tuple[np.ndarray, int]],
     *,
     sample_rate: int = 16000,
     frame_ms: int = 30,
@@ -25,15 +27,20 @@ def segment_wav_energy_vad(
 ) -> List[VadSegment]:
     """
     Simple local VAD segmentation based on frame energy (RMS).
-    Requires 16kHz mono WAV (we rely on the backend ffmpeg step to produce this).
+    Requires 16kHz mono. Accepts either path (str) or (audio_mono_int16, sr) tuple.
     """
-    import numpy as np  # type: ignore
     import soundfile as sf  # type: ignore
 
-    audio, sr = sf.read(wav_path, dtype="int16", always_2d=True)
+    if isinstance(wav_path_or_audio, (list, tuple)) and len(wav_path_or_audio) == 2:
+        mono, sr = wav_path_or_audio[0], int(wav_path_or_audio[1])
+        mono = np.asarray(mono, dtype=np.int16)
+        if mono.ndim == 2:
+            mono = mono.mean(axis=1).astype(np.int16)
+    else:
+        audio, sr = sf.read(str(wav_path_or_audio), dtype="int16", always_2d=True)
+        mono = audio.mean(axis=1).astype(np.int16)
     if sr != sample_rate:
         raise RuntimeError(f"VAD expects {sample_rate}Hz wav, got {sr}Hz")
-    mono = audio.mean(axis=1).astype(np.int16)
     padding_frames = max(1, int(padding_ms / frame_ms))
     min_frames = max(1, int(min_segment_ms / frame_ms))
 

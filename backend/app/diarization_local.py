@@ -23,10 +23,6 @@ class DiarizationConfig:
     therapist_label: str = "Терапевт"
 
 
-_ENCODER_CACHE: dict[tuple[str, str], Any] = {}
-_ENCODER_CACHE_LOCK = None  # lazy-created to avoid importing threading unless needed
-
-
 def _rms_normalize(chunk: Any, *, target_rms: float = 0.05) -> Any:
     import numpy as np  # type: ignore
 
@@ -51,29 +47,6 @@ def _linear_resample(x, sr_in: int, sr_out: int):
     t_in = np.linspace(0.0, 1.0, num=x.shape[0], endpoint=False, dtype=np.float64)
     t_out = np.linspace(0.0, 1.0, num=n_out, endpoint=False, dtype=np.float64)
     return np.interp(t_out, t_in, x).astype(x.dtype, copy=False)
-
-
-def _get_encoder(*, embedding_model: str, device: str):
-    global _ENCODER_CACHE_LOCK
-    if _ENCODER_CACHE_LOCK is None:
-        import threading
-
-        _ENCODER_CACHE_LOCK = threading.Lock()
-
-    key = (embedding_model, device)
-    with _ENCODER_CACHE_LOCK:
-        enc = _ENCODER_CACHE.get(key)
-        if enc is not None:
-            return enc
-
-        from speechbrain.inference.speaker import EncoderClassifier  # type: ignore
-
-        enc = EncoderClassifier.from_hparams(
-            source=embedding_model,
-            run_opts={"device": device},
-        )
-        _ENCODER_CACHE[key] = enc
-        return enc
 
 
 def _encode_embeddings(encoder: Any, chunks: list[Any], *, device: str) -> list[Any]:
@@ -182,7 +155,8 @@ def diarize_segments_speechbrain(
         return segments
 
     # Build embeddings per transcript segment (cached encoder + micro-batching).
-    encoder = _get_encoder(embedding_model=cfg.embedding_model, device=cfg.device)
+    from .embedding_cache import get_ecapa_encoder
+    encoder = get_ecapa_encoder(cfg.embedding_model, cfg.device)
 
     emb_list: list[np.ndarray] = []
     seg_map: list[int] = []

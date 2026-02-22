@@ -87,6 +87,12 @@ class TranscriptionService:
 
         from .services.diarization_fast import DiarizationFastConfig, diarize_audio_fast
 
+        audio_f32, sr = sf.read(audio_path, dtype="float32", always_2d=False)
+        if hasattr(audio_f32, "ndim") and audio_f32.ndim == 2:
+            audio_f32 = np.asarray(audio_f32.mean(axis=1), dtype=np.float32)
+        else:
+            audio_f32 = np.asarray(audio_f32, dtype=np.float32)
+
         if progress_cb:
             progress_cb("diarize", 0.2)
         fast_cfg = DiarizationFastConfig(
@@ -103,7 +109,9 @@ class TranscriptionService:
             therapist_label=str(self._diarization_therapist_label),
         )
         eff_num = 2 if self._diarization_therapy_mode else (int(num_speakers) if num_speakers is not None else None)
-        diar_segments = await asyncio.to_thread(diarize_audio_fast, audio_path, fast_cfg, num_speakers=eff_num)
+        diar_segments = await asyncio.to_thread(
+            diarize_audio_fast, (audio_f32, sr), fast_cfg, num_speakers=eff_num
+        )
         if not diar_segments:
             logger.warning("Diarization-first: diarize_audio_fast returned no segments")
             return None
@@ -125,9 +133,8 @@ class TranscriptionService:
 
         if progress_cb:
             progress_cb("transcribe", 0.5)
-        audio_i16, sr = sf.read(audio_path, dtype="int16", always_2d=True)
-        mono = audio_i16.mean(axis=1).astype(np.int16)
-        seg_conc = max(1, min(int(os.getenv("SEGMENT_CONCURRENCY", "2") or "2"), 16))
+        mono = (audio_f32 * 32767.0).clip(-32768, 32767).astype(np.int16)
+        seg_conc = max(1, min(int(os.getenv("SEGMENT_CONCURRENCY", "4") or "4"), 16))
         sem = asyncio.Semaphore(seg_conc)
 
         async def transcribe_one(idx: int, seg: dict, tdir: Path) -> Optional[dict]:
@@ -378,11 +385,16 @@ class TranscriptionService:
                 pass
 
             if use_longform:
+                import numpy as np  # type: ignore
+                import soundfile as sf  # type: ignore
+
+                audio_i16, sr = sf.read(audio_path, dtype="int16", always_2d=True)
+                mono = np.asarray(audio_i16.mean(axis=1), dtype=np.int16)
                 vad_threshold_scale = float(os.getenv("VAD_THRESHOLD_SCALE", "0.9") or "0.9")
                 vad_boundary_padding_s = float(os.getenv("VAD_BOUNDARY_PADDING_S", "0.3") or "0.3")
                 vad_segments = await asyncio.to_thread(
                     segment_wav_energy_vad,
-                    audio_path,
+                    (mono, int(sr)),
                     threshold_scale=vad_threshold_scale,
                     boundary_padding_s=vad_boundary_padding_s,
                 )
@@ -429,14 +441,8 @@ class TranscriptionService:
 
                 import tempfile
 
-                import numpy as np  # type: ignore
-                import soundfile as sf  # type: ignore
-
-                audio_i16, sr = sf.read(audio_path, dtype="int16", always_2d=True)
-                mono = audio_i16.mean(axis=1).astype(np.int16)
-
                 with tempfile.TemporaryDirectory(prefix="gigaam_vad_") as td:
-                    seg_conc = int(os.getenv("SEGMENT_CONCURRENCY", "2") or "2")
+                    seg_conc = int(os.getenv("SEGMENT_CONCURRENCY", "4") or "4")
                     seg_conc = max(1, min(seg_conc, 16))
                     sem = asyncio.Semaphore(seg_conc)
 
