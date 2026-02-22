@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+hydra-core
+omegaconf
+soundfile
+numpy
+sentencepiece
+speechbrain
+scikit-learn
+

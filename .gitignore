@@ -1,0 +1,13 @@
+.venv/
+.venv_tmp/
+.env
+data/
+output/
+logs/
+
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+
+.cursor/
