@@ -5,7 +5,7 @@ import FileUploader from './components/FileUploader.vue'
 import ProgressIndicator from './components/ProgressIndicator.vue'
 import TranscriptViewer from './components/TranscriptViewer.vue'
 
-import { getMarkdown, getStatus, getTranscriptData, transcribe } from './services/api'
+import { getMarkdown, getStatus, getTranscriptData, transcribe, triggerAnalysis } from './services/api'
 
 const file = ref(null)
 const taskId = ref('')
@@ -107,6 +107,9 @@ async function downloadMarkdown() {
 async function downloadAnalysis() {
   if (!taskId.value) return
   try {
+    error.value = 'Запрос анализа...'
+    await triggerAnalysis(taskId.value)
+    error.value = ''
     const text = await getMarkdown(taskId.value + '_analysis')
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
     const a = document.createElement('a')
@@ -117,7 +120,7 @@ async function downloadAnalysis() {
     a.remove()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   } catch (e) {
-    error.value = 'Анализ недоступен: ' + String(e?.message || e)
+    error.value = 'Ошибка анализа: ' + String(e?.message || e)
   }
 }
 

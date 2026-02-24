@@ -51,3 +51,7 @@ export async function getTranscriptData(taskId) {
   return await httpJson(`/jobs/${encodeURIComponent(taskId)}/data`)
 }
 
+export async function triggerAnalysis(taskId) {
+  return await httpJson(`/jobs/${encodeURIComponent(taskId)}/analyze`, { method: 'POST' })
+}
+

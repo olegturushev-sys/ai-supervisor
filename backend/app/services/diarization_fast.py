@@ -40,7 +40,7 @@ _CACHE_LOCK = threading.Lock()
 class DiarizationFastConfig:
     """Configuration for fast CPU diarization."""
 
-    device: str = "auto"  # auto = mps if available else cpu
+    device: str = "cpu"  # Force CPU to avoid MPS memory issues on macOS
     embedding_model: str = "speechbrain/spkrec-ecapa-voxceleb"
     vad_threshold: float = 0.5
     min_speech_duration_ms: int = 250
@@ -53,15 +53,8 @@ class DiarizationFastConfig:
     therapist_label: str = "Терапевт"
 
 
-def _resolve_device(prefer_mps: bool = True) -> str:
-    """Resolve device: mps if available on macOS, else cpu."""
-    try:
-        import torch  # type: ignore
-
-        if prefer_mps and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-            return "mps"
-    except Exception:
-        pass
+def _resolve_device(prefer_mps: bool = False) -> str:
+    """Resolve device: always CPU to avoid MPS memory issues."""
     return "cpu"
 
 

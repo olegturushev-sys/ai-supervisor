@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
 from typing import Any
+
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -192,4 +195,67 @@ async def download_markdown(filename: str) -> FileResponse:
         media_type="text/markdown; charset=utf-8",
         filename=path.name,
     )
+
+
+@app.post("/jobs/{job_id}/analyze")
+async def analyze_job(job_id: str) -> dict:
+    """
+    Trigger OpenRouter analysis for a job. Creates analysis file on demand.
+    """
+    logger = logging.getLogger(__name__)
+    from .openrouter_service import analyze_transcript
+    from .worker import _write_analysis_markdown, _project_root
+
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    if job.state != "done":
+        raise HTTPException(status_code=400, detail="job not completed")
+
+    from .config import OPENROUTER_API_KEY
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY not configured")
+
+    output_dir = _project_root() / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    md_path = output_dir / f"{job_id}.md"
+    analysis_path = output_dir / f"{job_id}_analysis.md"
+
+    if not md_path.exists():
+        raise HTTPException(status_code=404, detail="transcript not found")
+
+    try:
+        transcript_text = md_path.read_text(encoding="utf-8")
+        analysis = await analyze_transcript(transcript_text)
+
+        if not analysis:
+            analysis_path.write_text("# Анализ недоступен\n\nAPI вернул пустой результат.\n", encoding="utf-8")
+            return {"status": "error", "message": "API returned empty result"}
+
+        # Write analysis file
+        await asyncio.to_thread(
+            _write_analysis_markdown,
+            analysis_path,
+            transcript_text,
+            analysis,
+        )
+
+        # Also save to Downloads
+        downloads_path = Path.home() / "Downloads"
+        downloads_analysis_path = downloads_path / f"{job_id}_analysis.md"
+        await asyncio.to_thread(
+            _write_analysis_markdown,
+            downloads_analysis_path,
+            transcript_text,
+            analysis,
+        )
+
+        logger.info("Analysis completed for job %s", job_id)
+        return {"status": "ok", "message": "Analysis completed"}
+
+    except Exception as e:
+        logger.exception("Analysis failed for job %s: %s", job_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
 

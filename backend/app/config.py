@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from typing import Literal, Optional, Tuple
 
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
 # Load .env file if exists (for local development)
 _env_file = Path(__file__).resolve().parents[2] / ".env"
 if _env_file.exists():
