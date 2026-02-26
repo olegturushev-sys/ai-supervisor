@@ -12,7 +12,9 @@ const taskId = ref('')
 const status = ref(null)
 const transcriptData = ref(null)
 const isStarting = ref(false)
+const isAnalyzing = ref(false)
 const error = ref('')
+const success = ref('')
 const didAutoDownload = ref(false)
 
 let pollTimer = null
@@ -34,7 +36,9 @@ function reset() {
   status.value = null
   transcriptData.value = null
   isStarting.value = false
+  isAnalyzing.value = false
   error.value = ''
+  success.value = ''
   didAutoDownload.value = false
   if (pollTimer) clearTimeout(pollTimer)
   pollTimer = null
@@ -93,23 +97,30 @@ async function poll() {
 
 async function downloadMarkdown() {
   if (!taskId.value) return
-  const text = await getMarkdown(taskId.value)
-  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `${taskId.value}.md`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  try {
+    const text = await getMarkdown(taskId.value)
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${taskId.value}.md`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    success.value = 'Markdown скачан'
+    setTimeout(() => { success.value = '' }, 3000)
+  } catch (e) {
+    error.value = String(e?.message || e)
+  }
 }
 
 async function downloadAnalysis() {
   if (!taskId.value) return
+  isAnalyzing.value = true
+  error.value = ''
+  success.value = ''
   try {
-    error.value = 'Запрос анализа...'
     await triggerAnalysis(taskId.value)
-    error.value = ''
     const text = await getMarkdown(taskId.value + '_analysis')
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
     const a = document.createElement('a')
@@ -119,8 +130,12 @@ async function downloadAnalysis() {
     a.click()
     a.remove()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    success.value = 'Анализ скачан'
+    setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
     error.value = 'Ошибка анализа: ' + String(e?.message || e)
+  } finally {
+    isAnalyzing.value = false
   }
 }
 
@@ -166,11 +181,12 @@ watch(file, () => {
           </button>
 
           <button
-            class="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-            :disabled="!isDone"
+            class="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+            :disabled="!isDone || isAnalyzing"
             @click="downloadAnalysis"
           >
-            Скачать анализ
+            <span v-if="isAnalyzing" class="mr-2 animate-spin">⟳</span>
+            {{ isAnalyzing ? 'Анализ...' : 'Скачать анализ' }}
           </button>
 
           <button
@@ -183,6 +199,10 @@ watch(file, () => {
 
         <div v-if="error" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {{ error }}
+        </div>
+
+        <div v-if="success" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          {{ success }}
         </div>
 
         <ProgressIndicator

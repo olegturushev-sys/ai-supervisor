@@ -1,12 +1,24 @@
-fastapi
-uvicorn[standard]
-python-multipart
-hydra-core
-omegaconf
-soundfile
-numpy
-sentencepiece
-speechbrain
-scikit-learn
-httpx
+# Web framework and server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# HTTP client for OpenRouter API
+httpx>=0.27.0
+
+# Audio processing
+soundfile>=0.12.1
+numpy>=2.0.0
+
+# Speaker diarization
+speechbrain>=1.0.0
+scikit-learn>=1.5.0
+
+# GigaAM dependencies (also installed via vendor/gigaam)
+hydra-core>=1.3.0
+omegaconf>=2.3.0
+sentencepiece>=0.2.0
+
+# Additional utilities
+aiofiles>=23.0.0
 

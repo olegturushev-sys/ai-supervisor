@@ -144,16 +144,30 @@ fi
 print_info "Обновление pip..."
 python3 -m pip install --upgrade pip --quiet 2>/dev/null || true
 
-# Install main requirements
-print_info "Установка основных зависимостей..."
-if [ -f "requirements.txt" ]; then
-    pip3 install -r requirements.txt --quiet 2>/dev/null || print_warning "Некоторые пакеты не установились"
+# Install GigaAM from vendor (editable mode)
+print_info "Установка GigaAM из vendor..."
+if [ -d "vendor/gigaam" ] && [ -f "vendor/gigaam/pyproject.toml" ]; then
+    pip3 install -e ./vendor/gigaam --quiet 2>/dev/null || print_warning "Не удалось установить gigaam"
+else
+    print_warning "vendor/gigaam не найден"
 fi
 
-# Install backend requirements
+# Install backend requirements (includes all backend deps)
 if [ -f "backend/requirements.txt" ]; then
     print_info "Установка backend зависимостей..."
     pip3 install -r backend/requirements.txt --quiet 2>/dev/null || print_warning "Некоторые пакеты не установились"
+fi
+
+# Install WhisperX from vendor (editable mode)
+print_info "Установка WhisperX из vendor..."
+if [ -d "vendor/whisperx" ] && [ -f "vendor/whisperx/setup.py" -o -f "vendor/whisperx/pyproject.toml" ]; then
+    pip3 install -e ./vendor/whisperx --quiet 2>/dev/null || print_warning "Не удалось установить whisperx"
+else
+    print_info "vendor/whisperx не найден, будет использован из requirements.txt"
+    # Install whisperx from requirements.txt if vendor not available
+    if [ -f "requirements.txt" ]; then
+        pip3 install -r requirements.txt --quiet 2>/dev/null || print_warning "Некоторые пакеты не установились"
+    fi
 fi
 
 # Install frontend dependencies
@@ -226,6 +240,7 @@ echo ""
 
 # Download models using Python
 print_info "Загрузка моделей (может занять несколько минут)..."
+print_info "GigaAM устанавливается из vendor/, загружаем только модели для whisperx и diarization..."
 
 python3 << 'PYTHON_SCRIPT'
 import os
@@ -240,19 +255,7 @@ if hf_token.startswith("#"):
 
 try:
     from huggingface_hub import hf_hub_download, snapshot_download
-    
-    print("Downloading GigaAM model...")
-    try:
-        # Try to download GigaAM
-        snapshot_download(
-            repo_id="Nevergary/gigaam-rnnt",
-            token=hf_token if hf_token else None,
-            local_dir_use_symlinks=False
-        )
-        print("  GigaAM: OK")
-    except Exception as e:
-        print(f"  GigaAM: {e}")
-    
+
     print("Downloading Whisper tiny...")
     try:
         from faster_whisper import WhisperModel
@@ -260,7 +263,7 @@ try:
         print("  Whisper tiny: OK")
     except Exception as e:
         print(f"  Whisper tiny: {e}")
-    
+
     print("Downloading ECAPA model...")
     try:
         snapshot_download(
@@ -270,9 +273,20 @@ try:
         print("  ECAPA: OK")
     except Exception as e:
         print(f"  ECAPA: {e}")
-        
+
+    print("Downloading pyannote segmentation model (for VAD)...")
+    try:
+        hf_hub_download(
+            repo_id="pyannote/segmentation-3.0",
+            filename="pytorch_model.bin",
+            token=hf_token if hf_token else None
+        )
+        print("  segmentation-3.0: OK")
+    except Exception as e:
+        print(f"  segmentation-3.0: {e}")
+
     print("Models download complete!")
-    
+
 except ImportError as e:
     print(f"huggingface_hub not available: {e}")
     print("Models will be downloaded on first run")
@@ -294,14 +308,19 @@ import sys
 errors = []
 
 try:
+    import gigaam
+except Exception as e:
+    errors.append(f'gigaam: {e}')
+
+try:
     import whisperx
 except Exception as e:
     errors.append(f'whisperx: {e}')
 
 try:
-    import pyannote
+    import speechbrain
 except Exception as e:
-    errors.append(f'pyannote: {e}')
+    errors.append(f'speechbrain: {e}')
 
 try:
     import faster_whisper
@@ -309,9 +328,9 @@ except Exception as e:
     errors.append(f'faster_whisper: {e}')
 
 try:
-    import speechbrain
+    import fastapi
 except Exception as e:
-    errors.append(f'speechbrain: {e}')
+    errors.append(f'fastapi: {e}')
 
 if errors:
     print('Errors found:')

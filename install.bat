@@ -92,19 +92,20 @@ echo.
 echo Обновление pip...
 %PYTHON% -m pip install --upgrade pip >nul 2>&1
 
-:: Install main requirements
-if exist "requirements.txt" (
-    echo Установка основных зависимостей...
-    %PYTHON% -m pip install -r requirements.txt >> install_log.txt 2>&1
+:: Install GigaAM from vendor (editable mode)
+echo Установка GigaAM из vendor...
+if exist "vendor\gigaam\pyproject.toml" (
+    %PYTHON% -m pip install -e .\vendor\gigaam >nul 2>&1
     if errorlevel 1 (
-        echo Ошибка установки. Попробуйте вручную:
-        echo pip install -r requirements.txt
+        echo Не удалось установить gigaam
     ) else (
-        echo Основные зависимости установлены
+        echo GigaAM установлен
     )
+) else (
+    echo vendor/gigaam не найден
 )
 
-:: Install backend requirements
+:: Install backend requirements (includes all backend deps)
 if exist "backend\requirements.txt" (
     echo Установка backend зависимостей...
     %PYTHON% -m pip install -r backend\requirements.txt >> install_log.txt 2>&1
@@ -112,6 +113,29 @@ if exist "backend\requirements.txt" (
         echo Ошибка установки backend
     ) else (
         echo Backend зависимости установлены
+    )
+)
+
+:: Install WhisperX from vendor (editable mode)
+echo Установка WhisperX из vendor...
+if exist "vendor\whisperx\setup.py" (
+    %PYTHON% -m pip install -e .\vendor\whisperx >nul 2>&1
+    if errorlevel 1 (
+        echo Не удалось установить whisperx
+    ) else (
+        echo WhisperX установлен
+    )
+) else if exist "vendor\whisperx\pyproject.toml" (
+    %PYTHON% -m pip install -e .\vendor\whisperx >nul 2>&1
+    if errorlevel 1 (
+        echo Не удалось установить whisperx
+    ) else (
+        echo WhisperX установлен
+    )
+) else (
+    echo vendor/whisperx не найден, будет использован requirements.txt
+    if exist "requirements.txt" (
+        %PYTHON% -m pip install -r requirements.txt >> install_log.txt 2>&1
     )
 )
 
@@ -168,6 +192,7 @@ echo ===========================================
 echo.
 
 echo Загрузка моделей (может занять несколько минут)...
+echo GigaAM устанавливается из vendor/, загружаем только модели для whisperx и diarization...
 echo.
 
 %PYTHON% -c "
@@ -178,7 +203,7 @@ if not hf_token:
 
 try:
     from huggingface_hub import hf_hub_download, snapshot_download
-    
+
     print('Downloading Whisper tiny...')
     try:
         from faster_whisper import WhisperModel
@@ -186,7 +211,7 @@ try:
         print('  Whisper tiny: OK')
     except Exception as e:
         print(f'  Whisper tiny: {e}')
-    
+
     print('Downloading ECAPA model...')
     try:
         snapshot_download(
@@ -196,9 +221,20 @@ try:
         print('  ECAPA: OK')
     except Exception as e:
         print(f'  ECAPA: {e}')
-        
+
+    print('Downloading pyannote segmentation model (for VAD)...')
+    try:
+        hf_hub_download(
+            repo_id='pyannote/segmentation-3.0',
+            filename='pytorch_model.bin',
+            token=hf_token
+        )
+        print('  segmentation-3.0: OK')
+    except Exception as e:
+        print(f'  segmentation-3.0: {e}')
+
     print('Models download complete!')
-    
+
 except ImportError as e:
     print(f'huggingface_hub not available: {e}')
     print('Models will be downloaded on first run')
@@ -217,14 +253,19 @@ import sys
 errors = []
 
 try:
+    import gigaam
+except Exception as e:
+    errors.append(f'gigaam: {e}')
+
+try:
     import whisperx
 except Exception as e:
     errors.append(f'whisperx: {e}')
 
 try:
-    import pyannote
+    import speechbrain
 except Exception as e:
-    errors.append(f'pyannote: {e}')
+    errors.append(f'speechbrain: {e}')
 
 try:
     import faster_whisper
@@ -232,9 +273,9 @@ except Exception as e:
     errors.append(f'faster_whisper: {e}')
 
 try:
-    import speechbrain
+    import fastapi
 except Exception as e:
-    errors.append(f'speechbrain: {e}')
+    errors.append(f'fastapi: {e}')
 
 if errors:
     print('Errors found:')

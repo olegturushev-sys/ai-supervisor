@@ -8,6 +8,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const isDragging = ref(false)
 const error = ref('')
+const MAX_SIZE = 500 * 1024 * 1024  // 500MB
 
 const prettySize = computed(() => {
   if (!props.modelValue) return ''
@@ -32,6 +33,11 @@ function setFile(file) {
   if (!file) return
   if (!isAllowed(file)) {
     error.value = 'Поддерживаются только mp3, wav, m4a.'
+    emit('update:modelValue', null)
+    return
+  }
+  if (file.size > MAX_SIZE) {
+    error.value = 'Файл слишком большой (макс. 500MB).'
     emit('update:modelValue', null)
     return
   }

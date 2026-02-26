@@ -96,18 +96,20 @@ Write-Host ""
 Write-Info "Обновление pip..."
 & $pythonCmd -m pip install --upgrade pip --quiet 2>$null
 
-# Install main requirements
-if (Test-Path "requirements.txt") {
-    Write-Info "Установка основных зависимостей..."
-    & $pythonCmd -m pip install -r requirements.txt --quiet 2>$null
+# Install GigaAM from vendor (editable mode)
+Write-Info "Установка GigaAM из vendor..."
+if (Test-Path "vendor\gigaam\pyproject.toml") {
+    & $pythonCmd -m pip install -e .\vendor\gigaam --quiet 2>$null
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "Основные зависимости установлены"
+        Write-Success "GigaAM установлен"
     } else {
-        Write-Warn "Ошибка установки. Попробуйте вручную: pip install -r requirements.txt"
+        Write-Warn "Не удалось установить gigaam"
     }
+} else {
+    Write-Warn "vendor/gigaam не найден"
 }
 
-# Install backend requirements
+# Install backend requirements (includes all backend deps)
 if (Test-Path "backend\requirements.txt") {
     Write-Info "Установка backend зависимостей..."
     & $pythonCmd -m pip install -r backend\requirements.txt --quiet 2>$null
@@ -115,6 +117,22 @@ if (Test-Path "backend\requirements.txt") {
         Write-Success "Backend зависимости установлены"
     } else {
         Write-Warn "Ошибка установки backend"
+    }
+}
+
+# Install WhisperX from vendor (editable mode)
+Write-Info "Установка WhisperX из vendor..."
+if ((Test-Path "vendor\whisperx\setup.py") -or (Test-Path "vendor\whisperx\pyproject.toml")) {
+    & $pythonCmd -m pip install -e .\vendor\whisperx --quiet 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "WhisperX установлен"
+    } else {
+        Write-Warn "Не удалось установить whisperx"
+    }
+} else {
+    Write-Info "vendor/whisperx не найден, будет использован requirements.txt"
+    if (Test-Path "requirements.txt") {
+        & $pythonCmd -m pip install -r requirements.txt --quiet 2>$null
     }
 }
 
@@ -165,6 +183,7 @@ Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host ""
 
 Write-Info "Загрузка моделей (может занять несколько минут)..."
+Write-Info "GigaAM устанавливается из vendor/, загружаем только модели для whisperx и diarization..."
 Write-Host ""
 
 $env:HF_TOKEN = $HF_TOKEN
@@ -178,8 +197,8 @@ if not hf_token:
     hf_token = None
 
 try:
-    from huggingface_hub import snapshot_download
-    
+    from huggingface_hub import snapshot_download, hf_hub_download
+
     print('Downloading Whisper tiny...')
     try:
         from faster_whisper import WhisperModel
@@ -187,7 +206,7 @@ try:
         print('  Whisper tiny: OK')
     except Exception as e:
         print(f'  Whisper tiny: {e}')
-    
+
     print('Downloading ECAPA model...')
     try:
         snapshot_download(
@@ -197,9 +216,20 @@ try:
         print('  ECAPA: OK')
     except Exception as e:
         print(f'  ECAPA: {e}')
-        
+
+    print('Downloading pyannote segmentation model (for VAD)...')
+    try:
+        hf_hub_download(
+            repo_id='pyannote/segmentation-3.0',
+            filename='pytorch_model.bin',
+            token=hf_token
+        )
+        print('  segmentation-3.0: OK')
+    except Exception as e:
+        print(f'  segmentation-3.0: {e}')
+
     print('Models download complete!')
-    
+
 except ImportError as e:
     print(f'huggingface_hub not available: {e}')
 except Exception as e:
@@ -213,16 +243,15 @@ Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host ""
 
 Write-Info "Проверка импортов..."
-$importErrors = @()
-
-try { Import-Module whisperx -ErrorAction Stop } catch { $importErrors += "whisperx" }
-try { Import-Module pyannote -ErrorAction Stop } catch { $importErrors += "pyannote" }
-try { Import-Module faster_whisper -ErrorAction Stop } catch { $importErrors += "faster_whisper" }
-try { Import-Module speechbrain -ErrorAction Stop } catch { $importErrors += "speechbrain" }
 
 & $pythonCmd -c @"
 import sys
 errors = []
+
+try:
+    import gigaam
+except Exception as e:
+    errors.append(f'gigaam: {e}')
 
 try:
     import whisperx
@@ -230,9 +259,9 @@ except Exception as e:
     errors.append(f'whisperx: {e}')
 
 try:
-    import pyannote
+    import speechbrain
 except Exception as e:
-    errors.append(f'pyannote: {e}')
+    errors.append(f'speechbrain: {e}')
 
 try:
     import faster_whisper
@@ -240,9 +269,9 @@ except Exception as e:
     errors.append(f'faster_whisper: {e}')
 
 try:
-    import speechbrain
+    import fastapi
 except Exception as e:
-    errors.append(f'speechbrain: {e}')
+    errors.append(f'fastapi: {e}')
 
 if errors:
     print('Errors found:')
