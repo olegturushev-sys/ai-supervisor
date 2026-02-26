@@ -46,6 +46,14 @@ if ! command -v huggingface-cli &> /dev/null; then
     print_warning "huggingface-cli не найден, будет установлен с dependencies"
 fi
 
+# Initialize git submodules
+print_info "Инициализация git-субмодулей..."
+if [ -d ".git" ]; then
+    git submodule update --init --recursive 2>/dev/null || print_warning "Не удалось инициализировать субмодули"
+else
+    print_warning ".git не найден - субмодули не будут инициализированы"
+fi
+
 # Create output directory
 mkdir -p output
 

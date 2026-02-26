@@ -16,6 +16,13 @@ set "NC=[0m"
 
 :check_python
 echo Checking Python...
+
+:: Initialize git submodules
+echo Инициализация git-субмодулей...
+git submodule update --init --recursive >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] Не удалось инициализировать субмодули
+)
 python --version >nul 2>&1
 if errorlevel 1 (
     python3 --version >nul 2>&1

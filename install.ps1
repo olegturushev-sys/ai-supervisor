@@ -17,6 +17,13 @@ Write-Host "  Note Therapy - Установка (Windows)" -ForegroundColor Mage
 Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host ""
 
+# Initialize git submodules
+Write-Info "Инициализация git-субмодулей..."
+& git submodule update --init --recursive 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warn "Не удалось инициализировать субмодули"
+}
+
 # Check Python
 Write-Info "Проверка Python..."
 $pythonCmd = $null
