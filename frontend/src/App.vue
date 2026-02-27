@@ -20,7 +20,6 @@ const didAutoDownload = ref(false)
 let pollTimer = null
 
 const hasDiarization = computed(() => {
-  // heuristics: if transcript has speaker fields or the backend produced them.
   const segs = transcriptData.value?.segments || []
   return segs.some((s) => !!s?.speaker)
 })
@@ -46,7 +45,6 @@ function reset() {
 
 async function start() {
   if (!file.value) return
-  // Keep the selected file, but reset the run state.
   const selected = file.value
   reset()
   file.value = selected
@@ -55,15 +53,9 @@ async function start() {
   try {
     const r = await transcribe(file.value)
     taskId.value = r.task_id || r.job_id
-    // #region agent log
-    fetch('http://127.0.0.1:7504/ingest/b959b393-85a0-4667-bafc-8d33683b4cb1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8957bd'},body:JSON.stringify({sessionId:'8957bd',runId:'pre-fix',hypothesisId:'H2',location:'frontend/src/App.vue:start',message:'transcribe started',data:{taskId:taskId.value},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     await poll()
   } catch (e) {
     error.value = String(e?.message || e)
-    // #region agent log
-    fetch('http://127.0.0.1:7504/ingest/b959b393-85a0-4667-bafc-8d33683b4cb1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8957bd'},body:JSON.stringify({sessionId:'8957bd',runId:'pre-fix',hypothesisId:'H5',location:'frontend/src/App.vue:start',message:'start error',data:{error:String(e?.message||e)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   } finally {
     isStarting.value = false
   }
@@ -73,9 +65,6 @@ async function poll() {
   if (!taskId.value) return
   try {
     status.value = await getStatus(taskId.value)
-    // #region agent log
-    fetch('http://127.0.0.1:7504/ingest/b959b393-85a0-4667-bafc-8d33683b4cb1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8957bd'},body:JSON.stringify({sessionId:'8957bd',runId:'pre-fix',hypothesisId:'H3',location:'frontend/src/App.vue:poll',message:'status polled',data:{taskId:taskId.value,state:status.value?.state,stage:status.value?.stage,progress:status.value?.progress},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (status.value.state === 'done') {
       transcriptData.value = await getTranscriptData(taskId.value)
       if (!didAutoDownload.value) {
@@ -144,7 +133,6 @@ onBeforeUnmount(() => {
 })
 
 watch(file, () => {
-  // changing the file should reset current run
   if (taskId.value) reset()
 })
 </script>
