@@ -73,9 +73,14 @@ START_TIME=$(date +%s%N)
 
 # Run transcription
 cd backend
-export PYTHONPATH="${PWD}:${PYTHONPATH}"
+export PYTHONPATH="${PWD}:${PYTHONPATH:-}"
 
-python3 << PYEOF
+# Get the project root
+PROJECT_ROOT="$(cd .. && pwd)"
+export PROJECT_ROOT
+
+# Capture output
+OUTPUT=$(python3 << PYEOF
 import asyncio
 import sys
 import time
@@ -86,13 +91,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from app.whisperx_service import TranscriptionService
 
+project_root = os.environ.get('PROJECT_ROOT', '/Users/olegturushev/Note Therapy/whisperx-gigaam-mac')
+
 async def transcribe():
     service = TranscriptionService(
         model_name="tiny",
         batch_size=8,
     )
     
-    audio_path = Path("../experiments/test_audio.wav")
+    audio_path = Path(project_root) / "experiments" / "test_audio.wav"
     start = time.time()
     
     result = await service.transcribe(
@@ -109,29 +116,25 @@ async def transcribe():
     print(f"TRANSCRIPTION_TIME={duration:.3f}")
     print(f"RTF={duration/audio_duration:.4f}")
     print(f"SEGMENTS={len(result.get('segments', []))}")
-    
-    # Calculate memory usage (approximate)
-    import sys
-    print(f"MEMORY_MB={sys.getsizeof(result) / 1024 / 1024:.2f}")
 
 asyncio.run(transcribe())
 PYEOF
+)
 
-EXIT_CODE=$?
 END_TIME=$(date +%s%N)
 DURATION=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
+EXIT_CODE=$?
+echo "$OUTPUT"
 echo "" >&2
 echo "Total script duration: ${DURATION}s, Exit code: $EXIT_CODE" >&2
 
-# Output metrics in parseable format
-python3 << 'PYEOF'
-import sys
-import os
+# Parse metrics from output
+TRANSCRIPTION_TIME=$(echo "$OUTPUT" | grep "^TRANSCRIPTION_TIME=" | cut -d= -f2)
+RTF=$(echo "$OUTPUT" | grep "^RTF=" | cut -d= -f2)
+SEGMENTS=$(echo "$OUTPUT" | grep "^SEGMENTS=" | cut -d= -f2)
 
-# This will be parsed by the autoresearch loop
-print(f"METRIC transcription_time={os.environ.get('TRANSCRIPTION_TIME', '0')}")
-print(f"METRIC rtf={os.environ.get('RTF', '0')}")
-PYEOF
+echo "METRIC transcription_time=${TRANSCRIPTION_TIME:-0}"
+echo "METRIC rtf=${RTF:-0}"
+echo "METRIC segments=${SEGMENTS:-0}"
 
 exit $EXIT_CODE

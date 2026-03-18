@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Literal, Optional, Tuple
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.8"
 
 # Load .env file if exists (for local development)
 _env_file = Path(__file__).resolve().parents[2] / ".env"
@@ -28,19 +27,15 @@ def choose_device_compute_type() -> Tuple[Device, ComputeType]:
     """
     Defaults for this project:
     - cuda (if present) -> float16
-    - mps (Apple Silicon) -> int8 (with memory limit)
-    - cpu -> int8
+    - cpu -> int8 (stable on macOS)
     
-    Note: MPS memory limited via PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.8 to prevent crashes.
+    Note: MPS is disabled due to Metal GPU memory issues on macOS.
     """
     try:
         import torch
 
         if torch.cuda.is_available():
             return "cuda", "float16"
-        # MPS with memory limit for Apple Silicon
-        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-            return "mps", "int8"
         return "cpu", "int8"
     except Exception:
         return "cpu", "int8"

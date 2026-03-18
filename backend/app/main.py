@@ -259,3 +259,66 @@ async def analyze_job(job_id: str) -> dict:
         logger.exception("Analysis failed for job %s: %s", job_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/jobs/{job_id}/analyze-qwen")
+async def analyze_job_qwen(job_id: str) -> dict:
+    """
+    Trigger QWEN CLI analysis for a job. Creates analysis file on demand.
+    """
+    logger = logging.getLogger(__name__)
+    from .qwen_service import analyze_with_qwen_cli
+    from .worker import _write_analysis_markdown, _project_root
+
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    if job.state != "done":
+        raise HTTPException(status_code=400, detail="job not completed")
+
+    from .config import QWEN_CLI_PATH
+    if not QWEN_CLI_PATH:
+        raise HTTPException(status_code=400, detail="QWEN_CLI_PATH not configured")
+
+    output_dir = _project_root() / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    md_path = output_dir / f"{job_id}.md"
+    analysis_path = output_dir / f"{job_id}_qwen_analysis.md"
+
+    if not md_path.exists():
+        raise HTTPException(status_code=404, detail="transcript not found")
+
+    try:
+        transcript_text = md_path.read_text(encoding="utf-8")
+        analysis = await analyze_with_qwen_cli(transcript_text)
+
+        if not analysis:
+            analysis_path.write_text("# Анализ недоступен\n\nQWEN CLI вернул пустой результат.\n", encoding="utf-8")
+            return {"status": "error", "message": "QWEN CLI returned empty result"}
+
+        # Write analysis file
+        await asyncio.to_thread(
+            _write_analysis_markdown,
+            analysis_path,
+            transcript_text,
+            analysis,
+        )
+
+        # Also save to Downloads
+        downloads_path = Path.home() / "Downloads"
+        downloads_analysis_path = downloads_path / f"{job_id}_qwen_analysis.md"
+        await asyncio.to_thread(
+            _write_analysis_markdown,
+            downloads_analysis_path,
+            transcript_text,
+            analysis,
+        )
+
+        logger.info("QWEN CLI analysis completed for job %s", job_id)
+        return {"status": "ok", "message": "QWEN CLI analysis completed"}
+
+    except Exception as e:
+        logger.exception("QWEN CLI analysis failed for job %s: %s", job_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
