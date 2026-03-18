@@ -3,6 +3,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Optimize thread settings for CPU
+export OMP_NUM_THREADS=8
+export MKL_NUM_THREADS=8
+export NUMEXPR_NUM_THREADS=8
+
 echo "=== Autoresearch: Transcription Speed Benchmark ===" >&2
 
 # Create test audio if not exists (60 seconds of silence with beeps)
