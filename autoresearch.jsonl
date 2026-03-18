@@ -1,3 +1,4 @@
 {"type":"config","name":"transcription-speed","metricName":"transcription_time","metricUnit":"seconds","bestDirection":"lower"}
 {"run":1,"commit":"e4a848b","metric":13.098,"metrics":{"rtf":0.2183,"segments":16},"status":"keep","description":"baseline","timestamp":1773840413,"segment":0}
 {"run":2,"commit":"5e669e2","metric":12.998,"metrics":{"rtf":0.2166,"segments":16},"status":"keep","description":"SEGMENT_CONCURRENCY=16","timestamp":1773840446,"segment":0}
+{"run":3,"commit":"4fb5fa2","metric":12.998,"metrics":{"rtf":0.2166,"segments":16},"status":"keep","description":"thread optimization (OMP_NUM_THREADS=8)","timestamp":1773840583,"segment":0}
