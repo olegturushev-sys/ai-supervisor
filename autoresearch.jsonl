@@ -1,1 +1,2 @@
 {"type":"config","name":"transcription-speed","metricName":"transcription_time","metricUnit":"seconds","bestDirection":"lower"}
+{"run":1,"commit":"e4a848b","metric":13.098,"metrics":{"rtf":0.2183,"segments":16},"status":"keep","description":"baseline","timestamp":1773840413,"segment":0}
