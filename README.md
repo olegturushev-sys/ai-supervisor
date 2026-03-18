@@ -118,7 +118,7 @@ whisperx-gigaam-mac/
 | HF_TOKEN | HuggingFace токен | - | - |
 | OPENROUTER_API_KEY | OpenRouter ключ | - | - |
 | DIARIZATION_ENGINE | diarizer: fast | fast | fast |
-| DIARIZATION_EMBEDDING_MODEL | Модель эмбеддингов | ecapa-voxceleb | **ecapa-voxceleb-m** |
+| DIARIZATION_EMBEDDING_MODEL | Модель эмбеддингов | ecapa-voxceleb | ecapa-voxceleb |
 | DIARIZATION_THERAPY_MODE | Режим терапии (2 спикера) | 1 | 1 |
 | SEGMENT_CONCURRENCY | Параллельных сегментов | 4 | 16 |
 | DIARIZATION_FAST_MIN_SPEECH_MS | Min речь (мс) | 250 | 400 |
@@ -127,18 +127,19 @@ whisperx-gigaam-mac/
 ## Оптимизация производительности
 
 После оптимизации (autoresearch):
-- **Время транскрибации**: ~9с vs 13.1с (baseline) — **на 30% быстрее**
-- **RTF**: 0.15 vs 0.22
+- **Время транскрибации**: ~10.5с vs 13.1с (baseline) — **на 20% быстрее**
+- **RTF**: 0.18 vs 0.22
 - **Тест**: 60-секундное аудио на M2 Mac
 
 ### Ключевые параметры
 
 ```env
-DIARIZATION_EMBEDDING_MODEL=speechbrain/spkrec-ecapa-voxceleb-m
 SEGMENT_CONCURRENCY=16
 DIARIZATION_FAST_MIN_SPEECH_MS=400
 DIARIZATION_FAST_MIN_SILENCE_MS=200
 ```
+
+**Примечание**: `ecapa-voxceleb-m` быстрее, но требует HuggingFace авторизации.
 
 ## Технические notes
 
