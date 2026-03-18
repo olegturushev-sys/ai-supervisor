@@ -22,24 +22,24 @@
 - Result: 10.518s, RTF=0.1753
 - Status: **keep (BEST)**
 
-### Run 5: Larger VAD thresholds (500/250) — transcription_time=15.034s (discard)
-- What changed: MIN_SPEECH_MS=500, MIN_SILENCE_MS=250
-- Result: 15.034s (worse)
-- Status: discard
-
-### Run 6: Larger bandwidth (0.6) — transcription_time=12.630s (discard)
-- What changed: MEAN_SHIFT_BANDWIDTH=0.6
-- Result: 12.630s (worse than best)
-- Status: discard
+### Run 5-13: Additional experiments (all worse than Run 4)
+- MIN_SPEECH_MS=350/150: 13.466s (worse)
+- MAX_SEGMENT_S=5: 12.601s (worse)
+- MIN_SEGMENT_S=1.5: 12.992s (worse)
+- SUBSEGMENT_S=4: 13.067s (worse)
+- SUBSEGMENT_S=2: 10.637s (close, but worse)
+- SMOOTH_LABELS=0, RMS_NORMALIZE=0: 13.180s (worse)
+- MIN_SPEECH_MS=450/180: 12.788s (worse)
+- MIN_SPEECH_MS=380/180: 11.133s (worse)
+- SUBSEGMENT_S=3: 13.599s (worse)
 
 ## Key Insights
 
 1. **VAD thresholds are crucial**: MIN_SPEECH_MS=400, MIN_SILENCE_MS=200 reduces time by 19.7%
 2. SEGMENT_CONCURRENCY=16 provides marginal improvement
 3. Thread settings don't significantly impact this workload
-4. Larger VAD thresholds (500/250) make it worse
-5. Larger mean_shift_bandwidth makes it worse
-6. DIARIZATION_FIRST=1 is crucial for speed
+4. The optimal settings are in a narrow range around MIN_SPEECH_MS=400, MIN_SILENCE_MS=200
+5. Smoothing and RMS normalization are important (disable makes it worse)
 
 ## Final Optimal Settings
 
@@ -48,11 +48,9 @@ SEGMENT_CONCURRENCY=16
 DIARIZATION_FAST_MIN_SPEECH_MS=400
 DIARIZATION_FAST_MIN_SILENCE_MS=200
 DIARIZATION_FAST_MEAN_SHIFT_BANDWIDTH=0.4
+DIARIZATION_SMOOTH_LABELS=1
+DIARIZATION_RMS_NORMALIZE=1
 ```
 
 **Result**: 10.518s (RTF=0.1753) vs baseline 13.098s (RTF=0.2183)
 **Improvement**: 19.7% faster
-
-## Quality Considerations
-
-Larger VAD thresholds may skip short pauses/speech. For therapy sessions with natural speech patterns, this should be acceptable. Monitor output quality for missed short utterances.
